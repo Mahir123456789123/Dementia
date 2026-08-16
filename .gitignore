@@ -1,0 +1,8 @@
+# Ignore everything in the project root
+*
+
+# But keep .gitignore itself
+!.gitignore
+
+# Keep the Major Dementia notebook
+!Major_Dementia.ipynb
