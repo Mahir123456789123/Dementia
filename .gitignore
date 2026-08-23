@@ -1,8 +1,42 @@
-# Ignore everything in the project root
-*
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 
-# But keep .gitignore itself
-!.gitignore
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Keep the Major Dementia notebook
-!Major_Dementia.ipynb
+# Python backend
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Python secrets/config
+backend/.env
+backend/.env.*
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Frontend secrets/config
+frontend/.env
+frontend/.env.*
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
