@@ -1,4 +1,5 @@
-import io
+import os
+import tempfile
 import time
 import librosa
 from fastapi import APIRouter, File, UploadFile, HTTPException
@@ -19,12 +20,32 @@ async def analyze_audio(audio: UploadFile = File(...)):
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file provided.")
         
+    temp_audio_path = None
     try:
-        # Load audio at 16kHz mono using librosa
-        audio_array, sr = librosa.load(io.BytesIO(audio_bytes), sr=16000, mono=True)
+        # Preserve the container extension so audioread/ffmpeg can identify WebM/OGG.
+        suffix = os.path.splitext(audio.filename or "recording.wav")[1].lower() or ".wav"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_audio:
+            temp_audio.write(audio_bytes)
+            temp_audio_path = temp_audio.name
+
+        audio_array, sr = librosa.load(temp_audio_path, sr=16000, mono=True)
         audio_duration = len(audio_array) / sr
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Unsupported audio format: {str(e)}")
+        content_type = audio.content_type or "unknown"
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Could not decode the uploaded audio ({content_type}). "
+                "Please upload WAV, WebM, or OGG audio. "
+                f"Decoder error: {e}"
+            ),
+        )
+    finally:
+        if temp_audio_path:
+            try:
+                os.unlink(temp_audio_path)
+            except OSError:
+                pass
         
     if audio_duration < 1.0:
         raise HTTPException(status_code=400, detail="Recording is too short.")

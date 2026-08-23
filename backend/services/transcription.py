@@ -1,4 +1,3 @@
-import sys
 from backend.config import MOCK_ANALYSIS_MODE
 
 class TranscriptionEngine:
@@ -8,10 +7,11 @@ class TranscriptionEngine:
             return
             
         try:
-            from crisperwhisper import CrisperWhisper
-            self.model = CrisperWhisper(model="turbo")
-        except ImportError:
+            from crisperwhisper import CrisperWhisperModel
+            self.model = CrisperWhisperModel("turbo", backend="transformers")
+        except (ImportError, RuntimeError) as exc:
             print("WARNING: CrisperWhisper not found. Please install the required package.")
+            print(f"Transcription unavailable: {exc}")
             self.model = None
 
     def transcribe(self, audio_array):
@@ -41,7 +41,6 @@ class TranscriptionEngine:
                 ]
             }
             
-        # Using exact kwargs from the prompt
         result = self.model.transcribe(
             audio_array, 
             language="en", 
@@ -49,17 +48,16 @@ class TranscriptionEngine:
             word_timestamps=True
         )
         
-        # Format the segments structure as expected by backend
         segments = []
-        for word_info in result.get("words", []):
+        for word_info in getattr(result, "words", []) or []:
             segments.append({
-                "start": word_info["start"],
-                "end": word_info["end"],
-                "text": word_info["word"]
+                "start": float(getattr(word_info, "start", 0.0)),
+                "end": float(getattr(word_info, "end", 0.0)),
+                "text": getattr(word_info, "word", "")
             })
             
         return {
-            "text": result["text"],
+            "text": result.text,
             "segments": segments
         }
 

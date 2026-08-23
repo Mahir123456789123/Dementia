@@ -1,16 +1,79 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Mic, Square, Play, Pause, RefreshCw, Upload, FileText, Activity, Brain, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Mic, Square, RefreshCw, Upload, FileText, Activity, Brain, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 
 type AppState = "INTRO" | "CONSENT" | "MIC_CHECK" | "READY" | "RECORDING" | "REVIEW" | "PROCESSING" | "COMPLETE" | "ERROR";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+type Attribution = { word: string; delta: number };
+type AnalysisResult = {
+  prediction: { label: string; probability: number; threshold: number; confidence: number };
+  mmse: { prediction: number; min: number; max: number };
+  severity: { label: string };
+  transcription: { text: string; segments: Array<{ start: number; end: number; text: string }> };
+  speech_biomarkers: Record<string, number>;
+  evidence: string[];
+  attribution: Attribution[];
+};
+
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const channelCount = Math.min(buffer.numberOfChannels, 2);
+  const frameCount = buffer.length;
+  const bytesPerSample = 2;
+  const dataSize = frameCount * channelCount * bytesPerSample;
+  const wav = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(wav);
+
+  const writeText = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+
+  writeText(0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeText(8, "WAVE");
+  writeText(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, buffer.sampleRate, true);
+  view.setUint32(28, buffer.sampleRate * channelCount * bytesPerSample, true);
+  view.setUint16(32, channelCount * bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  writeText(36, "data");
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    for (let channel = 0; channel < channelCount; channel += 1) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[frame]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += bytesPerSample;
+    }
+  }
+
+  return new Blob([wav], { type: "audio/wav" });
+}
+
+async function convertRecordingToWav(blob: Blob): Promise<Blob> {
+  const audioContext = new AudioContext();
+  try {
+    const decoded = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    return audioBufferToWav(decoded);
+  } finally {
+    await audioContext.close();
+  }
+}
 
 export default function Home() {
   const [state, setState] = useState<AppState>("INTRO");
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [processingStage, setProcessingStage] = useState(0);
 
@@ -33,6 +96,10 @@ export default function Home() {
     "Preparing final report"
   ];
 
+  const stopTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
+
   useEffect(() => {
     return () => stopTimer();
   }, []);
@@ -50,14 +117,12 @@ export default function Home() {
     }, 1000);
   };
 
-  const stopTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
-
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
+        .find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -66,7 +131,9 @@ export default function Home() {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        const blob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || "audio/webm",
+        });
         setAudioBlob(blob);
         setAudioURL(URL.createObjectURL(blob));
         stream.getTracks().forEach((track) => track.stop());
@@ -75,7 +142,7 @@ export default function Home() {
       mediaRecorder.start();
       setState("RECORDING");
       startTimer();
-    } catch (err) {
+    } catch {
       setErrorMsg("Microphone permission denied or unavailable.");
       setState("ERROR");
     }
@@ -103,11 +170,10 @@ export default function Home() {
     }, 2000);
 
     const formData = new FormData();
-    formData.append("audio", audioBlob, "recording.wav");
-
     try {
-      // Assuming backend running on 8000
-      const res = await fetch("http://localhost:8000/api/analyze", {
+      const wavBlob = await convertRecordingToWav(audioBlob);
+      formData.append("audio", wavBlob, "recording.wav");
+      const res = await fetch(`${API_BASE_URL}/api/analyze`, {
         method: "POST",
         body: formData,
       });
@@ -121,9 +187,9 @@ export default function Home() {
       
       setAnalysisResult(data);
       setState("COMPLETE");
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearInterval(progressInterval);
-      setErrorMsg(err.message || "Failed to connect to backend");
+      setErrorMsg(err instanceof Error ? err.message : "Failed to connect to backend");
       setState("ERROR");
     }
   };
@@ -342,12 +408,12 @@ export default function Home() {
               {analysisResult.attribution && analysisResult.attribution.length > 0 && (
                 <div className="mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-200">
                   <h3 className="text-lg font-semibold mb-4 text-slate-800">Model Attribution</h3>
-                  <p className="text-sm text-slate-500 mb-6">The model's prediction changed most when these transcript elements were removed:</p>
+                  <p className="text-sm text-slate-500 mb-6">The model&apos;s prediction changed most when these transcript elements were removed:</p>
                   
                   <div className="space-y-3">
-                    {analysisResult.attribution.map((attr: any, i: number) => (
+                    {analysisResult.attribution.map((attr: Attribution, i: number) => (
                       <div key={i} className="flex items-center">
-                        <div className="w-32 text-right pr-4 font-medium text-slate-700">"{attr.word}"</div>
+                        <div className="w-32 text-right pr-4 font-medium text-slate-700">&quot;{attr.word}&quot;</div>
                         <div className="flex-1 bg-slate-200 rounded-full h-4 overflow-hidden">
                           <div 
                             className="bg-blue-500 h-full rounded-full" 
@@ -381,7 +447,7 @@ export default function Home() {
               <div className="mb-10">
                 <h3 className="text-lg font-semibold mb-4 text-slate-800">Automatically Generated Transcript</h3>
                 <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 text-slate-700 leading-relaxed font-serif">
-                  "{analysisResult.transcription.text}"
+                  &quot;{analysisResult.transcription.text}&quot;
                 </div>
               </div>
 

@@ -1,42 +1,42 @@
-# OS / editor
+# Keep only the application source and the primary notebook at the repository root.
+*
+!.gitignore
+!Major_Dementia.ipynb
+!backend/
+!backend/**
+!frontend/
+!frontend/**
+
+# OS and editor files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Python environments, caches, and secrets
+venv/
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.env
+**/.env.*
 
-# Python backend
-backend/.venv/
-backend/venv/
-backend/__pycache__/
-backend/**/*.pyc
-backend/.pytest_cache/
-backend/.mypy_cache/
-
-# Python secrets/config
-backend/.env
-backend/.env.*
-
-# Frontend (Next.js)
+# Frontend dependencies and build output
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.turbo/
 
-# Frontend secrets/config
-frontend/.env
-frontend/.env.*
-
-# Build artifacts
+# Logs and common build output
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 dist/
 build/
 coverage/
-
-# Jupyter checkpoints
 .ipynb_checkpoints/

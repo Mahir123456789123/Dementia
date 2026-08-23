@@ -1,7 +1,5 @@
 import os
 import torch
-from transformers import AutoTokenizer, Wav2Vec2Processor
-from backend.models.dementia_model import MultimodalMTLDementiaDetector
 from backend.config import CHECKPOINT_PATH, TEXT_MODEL_NAME, AUDIO_MODEL_NAME, MOCK_ANALYSIS_MODE
 
 class ModelManager:
@@ -19,8 +17,8 @@ class ModelManager:
             
         if MOCK_ANALYSIS_MODE:
             self.device = "cpu"
-            self.tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME, use_fast=False)
-            self.audio_processor = Wav2Vec2Processor.from_pretrained(AUDIO_MODEL_NAME)
+            self.tokenizer = None
+            self.audio_processor = None
             self.model = None
             self.threshold = 0.5
             self.initialized = True
@@ -28,6 +26,9 @@ class ModelManager:
 
         print("Loading models into memory...")
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        from transformers import AutoTokenizer, Wav2Vec2Processor
+        from backend.models.dementia_model import MultimodalMTLDementiaDetector
         
         self.tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME, use_fast=False)
         self.audio_processor = Wav2Vec2Processor.from_pretrained(AUDIO_MODEL_NAME)
@@ -37,9 +38,10 @@ class ModelManager:
         
         # Load checkpoint
         if os.path.exists(CHECKPOINT_PATH):
-            checkpoint = torch.load(CHECKPOINT_PATH, map_location=self.device)
-            self.model.load_state_dict(checkpoint['state_dict'])
-            self.threshold = checkpoint.get('threshold', 0.5)
+            checkpoint = torch.load(CHECKPOINT_PATH, map_location=self.device, weights_only=False)
+            state_dict = checkpoint.get('state_dict', checkpoint) if isinstance(checkpoint, dict) else checkpoint
+            self.model.load_state_dict(state_dict)
+            self.threshold = checkpoint.get('threshold', 0.5) if isinstance(checkpoint, dict) else 0.5
             print(f"Loaded checkpoint from {CHECKPOINT_PATH} (threshold: {self.threshold})")
         else:
             print(f"WARNING: Checkpoint not found at {CHECKPOINT_PATH}. Using untrained weights.")

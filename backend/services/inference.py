@@ -50,7 +50,7 @@ class InferenceEngine:
         # 3. Base inference
         model.eval()
         with torch.no_grad():
-            with torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu'):
+            with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                 w2v_out = model.forward_audio_features(audio_tensor)
                 diag_logits, mmse_preds, severity_logits = model.forward_from_features(
                     input_ids, attention_mask, w2v_out, calibrate=True
@@ -130,7 +130,7 @@ class InferenceEngine:
         results = []
         
         with torch.no_grad():
-            with torch.amp.autocast('cuda' if torch.cuda.is_available() else 'cpu'):
+            with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                 for block in blocks:
                     # Replace block with blanks
                     occluded_words = list(words)
