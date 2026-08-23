@@ -9,6 +9,7 @@ class ModelManager:
         if cls._instance is None:
             cls._instance = super(ModelManager, cls).__new__(cls)
             cls._instance.initialized = False
+            cls._instance.mock_mode = MOCK_ANALYSIS_MODE
         return cls._instance
 
     def initialize(self):

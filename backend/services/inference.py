@@ -25,6 +25,8 @@ class InferenceEngine:
                     {"word": "um", "delta": 0.052}
                 ]
             }
+
+        model_manager.initialize()
             
         model = model_manager.model
         tokenizer = model_manager.tokenizer

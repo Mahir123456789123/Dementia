@@ -51,7 +51,10 @@ async def analyze_audio(audio: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Recording is too short.")
         
     # 2. Transcribe
-    transcription_result = transcription_engine.transcribe(audio_array)
+    try:
+        transcription_result = transcription_engine.transcribe(audio_array)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     transcript_text = transcription_result["text"]
     segments = transcription_result["segments"]
     

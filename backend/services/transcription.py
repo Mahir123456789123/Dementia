@@ -5,18 +5,22 @@ class TranscriptionEngine:
         if MOCK_ANALYSIS_MODE:
             self.model = None
             return
-            
+        self.model = None
+
+    def _initialize(self):
+        if self.model is not None:
+            return
         try:
             from crisperwhisper import CrisperWhisperModel
             self.model = CrisperWhisperModel("turbo", backend="transformers")
         except (ImportError, RuntimeError) as exc:
-            print("WARNING: CrisperWhisper not found. Please install the required package.")
-            print(f"Transcription unavailable: {exc}")
-            self.model = None
+            raise RuntimeError(
+                "CrisperWhisper is unavailable. Install backend requirements and "
+                f"try again. Details: {exc}"
+            ) from exc
 
     def transcribe(self, audio_array):
-        if MOCK_ANALYSIS_MODE or self.model is None:
-            # Mock verbatim transcript with timestamps
+        if MOCK_ANALYSIS_MODE:
             return {
                 "text": "well um I see a boy taking a cookie from the jar and he is about to fall.",
                 "segments": [
@@ -41,6 +45,7 @@ class TranscriptionEngine:
                 ]
             }
             
+        self._initialize()
         result = self.model.transcribe(
             audio_array, 
             language="en", 

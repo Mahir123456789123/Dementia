@@ -14,13 +14,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    model_manager.initialize()
-
 @app.get("/api/health")
 def health_check():
-    return {"status": "healthy", "model_initialized": model_manager.initialized}
+    return {
+        "status": "healthy",
+        "model_initialized": model_manager.initialized,
+        "mode": "mock" if model_manager.mock_mode else "real",
+    }
 
 app.include_router(analyze.router, prefix="/api")
 
