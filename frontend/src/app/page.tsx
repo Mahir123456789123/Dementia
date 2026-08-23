@@ -8,14 +8,16 @@ type AppState = "INTRO" | "CONSENT" | "MIC_CHECK" | "READY" | "RECORDING" | "REV
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 type Attribution = { word: string; delta: number };
+type EvidenceItem = { rank: string; feature: string; finding: string; clinical_relevance: string; severity_weight: number };
 type AnalysisResult = {
-  prediction: { label: string; probability: number; threshold: number; confidence: number };
+  prediction: { label: string; probability: number; threshold: number; confidence: number; positive: boolean; decision: string };
   mmse: { prediction: number; min: number; max: number };
   severity: { label: string };
   transcription: { text: string; segments: Array<{ start: number; end: number; text: string }> };
   speech_biomarkers: Record<string, number>;
-  evidence: string[];
+  evidence: EvidenceItem[];
   attribution: Attribution[];
+  explainability: { clinical_explanation: string; evidence_ranking: EvidenceItem[]; report_text: string };
 };
 
 function audioBufferToWav(buffer: AudioBuffer): Blob {
@@ -354,6 +356,14 @@ export default function Home() {
                 <button onClick={() => setState("READY")} className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors">Start New</button>
               </div>
 
+              <div className={`mb-8 rounded-2xl border p-6 ${analysisResult.prediction.positive ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"}`}>
+                <p className={`text-sm font-semibold uppercase tracking-wider ${analysisResult.prediction.positive ? "text-red-700" : "text-green-700"}`}>Screening decision</p>
+                <p className={`mt-2 text-2xl font-bold ${analysisResult.prediction.positive ? "text-red-900" : "text-green-900"}`}>
+                  {analysisResult.prediction.positive ? "Positive" : "Negative"}
+                </p>
+                <p className="mt-2 text-sm text-slate-700">{analysisResult.prediction.decision}</p>
+              </div>
+
               {/* Model Summary */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="col-span-1 md:col-span-1 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100">
@@ -434,12 +444,27 @@ export default function Home() {
                 <div className="mb-8">
                   <h3 className="text-lg font-semibold mb-4 text-slate-800">Why the model produced this result</h3>
                   <div className="flex flex-wrap gap-3">
-                    {analysisResult.evidence.map((ev: string, i: number) => (
-                      <span key={i} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-100">
-                        {ev}
-                      </span>
+                    {analysisResult.evidence.map((ev: EvidenceItem, i: number) => (
+                      <div key={i} className="w-full rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-indigo-950">
+                        <div className="flex flex-wrap items-center gap-2 font-semibold"><span>{ev.rank}</span><span>{ev.feature}</span></div>
+                        <p className="mt-1 text-sm">{ev.finding}</p>
+                        <p className="mt-1 text-xs text-indigo-700">{ev.clinical_relevance}</p>
+                      </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {analysisResult.explainability && (
+                <div className="mb-8 space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-800">Clinical Explainability</h3>
+                  <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-700 leading-relaxed">
+                    {analysisResult.explainability.clinical_explanation}
+                  </div>
+                  <details className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                    <summary className="cursor-pointer font-semibold text-slate-800">View full assessment report</summary>
+                    <pre className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{analysisResult.explainability.report_text}</pre>
+                  </details>
                 </div>
               )}
 

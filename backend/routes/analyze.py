@@ -3,7 +3,6 @@ import tempfile
 import time
 import librosa
 from fastapi import APIRouter, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
 from backend.services.transcription import transcription_engine
 from backend.services.biomarker_extractor import SpeechBiomarkerExtractor, ClinicalEvidenceScorer
 from backend.services.inference import inference_engine
@@ -71,6 +70,27 @@ async def analyze_audio(audio: UploadFile = File(...)):
     # 5. Evidence Scoring
     evidence_scorer = ClinicalEvidenceScorer(THRESHOLDS)
     evidence = evidence_scorer.score(biomarkers)
+
+    prediction = {
+        "label": inference_result["predicted_label"],
+        "probability": inference_result["dementia_probability"],
+        "threshold": inference_result["threshold"],
+        "confidence": inference_result["confidence"],
+        "positive": inference_result["predicted_label"] == "Dementia",
+        "decision": "POSITIVE - Dementia screening signal detected" if inference_result["predicted_label"] == "Dementia" else "NEGATIVE - No dementia screening signal detected",
+    }
+    prediction_context = {
+        "probability": prediction["probability"],
+        "threshold": prediction["threshold"],
+        "positive": prediction["positive"],
+        "mmse": inference_result["mmse_prediction"],
+        "severity": inference_result["severity_prediction"],
+    }
+    from backend.services.biomarker_extractor import ClinicalExplanationGenerator, ClinicalReportGenerator
+    clinical_explanation = ClinicalExplanationGenerator().generate(biomarkers, prediction_context, evidence)
+    report_text = ClinicalReportGenerator().generate(
+        {**prediction_context, "decision": prediction["decision"]}, biomarkers, evidence, clinical_explanation
+    )
     
     # 6. Response Construction
     processing_time = time.time() - start_time
@@ -78,10 +98,7 @@ async def analyze_audio(audio: UploadFile = File(...)):
     response = {
         "status": "success",
         "prediction": {
-            "label": inference_result["predicted_label"],
-            "probability": inference_result["dementia_probability"],
-            "threshold": inference_result["threshold"],
-            "confidence": inference_result["confidence"]
+            **prediction
         },
         "mmse": {
             "prediction": inference_result["mmse_prediction"],
@@ -98,6 +115,11 @@ async def analyze_audio(audio: UploadFile = File(...)):
         "speech_biomarkers": biomarkers,
         "evidence": evidence,
         "attribution": inference_result["attribution"],
+        "explainability": {
+            "clinical_explanation": clinical_explanation,
+            "evidence_ranking": evidence,
+            "report_text": report_text,
+        },
         "metadata": {
             "audio_duration": round(audio_duration, 1),
             "model_version": "dementia_mtl_FINAL",
@@ -105,4 +127,4 @@ async def analyze_audio(audio: UploadFile = File(...)):
         }
     }
     
-    return JSONResponse(content=response)
+    return response

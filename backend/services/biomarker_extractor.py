@@ -91,17 +91,59 @@ class ClinicalEvidenceScorer:
     def score(self, biomarkers):
         evidence = []
         
-        if biomarkers["pause_ratio"] > self.thresholds["pause_ratio_high"]:
-            evidence.append("Elevated pause ratio detected")
-        if biomarkers["speech_rate"] < self.thresholds["speech_rate_low"]:
-            evidence.append("Reduced speech rate detected")
-        if biomarkers["lexical_diversity"] < self.thresholds["lexical_diversity_low"]:
-            evidence.append("Lower lexical diversity detected")
-        if biomarkers["repeat_ratio"] > self.thresholds["repeat_ratio_high"]:
-            evidence.append("Elevated word repetition detected")
-        if biomarkers["pronoun_ratio"] > self.thresholds["pronoun_ratio_high"]:
-            evidence.append("Elevated pronoun usage ratio detected")
-        if biomarkers["avg_sentence_length"] < self.thresholds["avg_sentence_length_low"]:
-            evidence.append("Shorter average sentence length detected")
+        if biomarkers["pause_ratio"] >= self.thresholds["pause_ratio_high"]:
+            evidence.append({"rank": "★★★★★", "feature": "Long pause ratio", "finding": f"{biomarkers['pause_ratio'] * 100:.1f}% of recording in pauses", "clinical_relevance": "May indicate word-retrieval latency or hesitation.", "severity_weight": 5})
+        if biomarkers["speech_rate"] <= self.thresholds["speech_rate_low"]:
+            evidence.append({"rank": "★★★★★", "feature": "Slow speech rate", "finding": f"{biomarkers['speech_rate']:.1f} WPM", "clinical_relevance": "May indicate reduced motor-linguistic processing speed.", "severity_weight": 5})
+        if biomarkers["repeat_ratio"] >= self.thresholds["repeat_ratio_high"]:
+            evidence.append({"rank": "★★★★☆", "feature": "Word repetition", "finding": f"Repeated words ratio at {biomarkers['repeat_ratio'] * 100:.1f}%", "clinical_relevance": "May indicate verbal perseveration.", "severity_weight": 4})
+        if biomarkers["lexical_diversity"] <= self.thresholds["lexical_diversity_low"]:
+            evidence.append({"rank": "★★★☆☆", "feature": "Reduced lexical diversity", "finding": f"Type-token ratio of {biomarkers['lexical_diversity']:.2f}", "clinical_relevance": "May reflect reduced active vocabulary in this sample.", "severity_weight": 3})
+        if biomarkers["pronoun_ratio"] >= self.thresholds["pronoun_ratio_high"]:
+            evidence.append({"rank": "★★★☆☆", "feature": "Elevated vague pronouns", "finding": f"Pronoun ratio of {biomarkers['pronoun_ratio'] * 100:.1f}%", "clinical_relevance": "May reflect reduced semantic specificity.", "severity_weight": 3})
+        if biomarkers["avg_sentence_length"] <= self.thresholds["avg_sentence_length_low"]:
+            evidence.append({"rank": "★★★☆☆", "feature": "Shorter sentences", "finding": f"Average sentence length of {biomarkers['avg_sentence_length']:.1f} words", "clinical_relevance": "Describes reduced utterance complexity in this sample.", "severity_weight": 3})
             
-        return evidence
+        return sorted(evidence, key=lambda item: item["severity_weight"], reverse=True)
+
+
+class ClinicalExplanationGenerator:
+    def generate(self, biomarkers, prediction, evidence):
+        probability = prediction["probability"]
+        severity = prediction["severity"]
+        if not evidence:
+            evidence_text = "No individual handcrafted speech biomarker exceeded the configured reference thresholds."
+        else:
+            evidence_text = "The strongest observed signals were " + ", ".join(item["feature"].lower() for item in evidence[:3]) + "."
+        decision_text = "supports a positive dementia screening result" if prediction["positive"] else "does not support a positive dementia screening result"
+        return (f"The model estimated a {probability * 100:.1f}% probability of dementia, which {decision_text} "
+                f"at the configured threshold of {prediction['threshold']:.2f}. {evidence_text} "
+                f"The estimated MMSE is {prediction['mmse']:.1f}/30 with an estimated severity of {severity}. "
+                "This is an assistive research result and requires qualified clinical assessment.")
+
+
+class ClinicalReportGenerator:
+    def generate(self, prediction, biomarkers, evidence, explanation):
+        lines = [
+            "DEMENTIA SPEECH ASSESSMENT REPORT",
+            "=================================",
+            f"Decision       : {prediction['decision']}",
+            f"Probability    : {prediction['probability'] * 100:.1f}%",
+            f"Threshold      : {prediction['threshold']:.2f}",
+            f"Estimated MMSE : {prediction['mmse']:.1f} / 30",
+            f"Severity       : {prediction['severity']}",
+            "",
+            "SPEECH BIOMARKERS",
+            f"Speech rate    : {biomarkers.get('speech_rate', 0):.1f} WPM",
+            f"Pause ratio    : {biomarkers.get('pause_ratio', 0) * 100:.1f}%",
+            f"Fluency score  : {biomarkers.get('fluency_score', 0):.1f} / 100",
+            f"Lexical TTR    : {biomarkers.get('lexical_diversity', 0):.2f}",
+            "",
+            "CLINICAL EXPLANATION",
+            explanation,
+            "",
+            "RANKED EVIDENCE",
+        ]
+        lines.extend(f"{item['rank']} {item['feature']}: {item['finding']} | {item['clinical_relevance']}" for item in evidence)
+        lines.extend(["", "Disclaimer: This research output is not a standalone medical diagnosis."])
+        return "\n".join(lines)
