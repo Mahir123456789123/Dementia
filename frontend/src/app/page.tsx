@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { Mic, Square, RefreshCw, Upload, FileText, Activity, Brain, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
+import picture from "./image.png";
 
 type AppState = "INTRO" | "CONSENT" | "MIC_CHECK" | "READY" | "RECORDING" | "REVIEW" | "PROCESSING" | "COMPLETE" | "ERROR";
 
@@ -260,9 +262,13 @@ export default function Home() {
             <div className="flex flex-col items-center space-y-8 flex-grow animate-in fade-in duration-300">
               <h2 className="text-2xl font-semibold">Picture Description Task</h2>
               
-              <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-2xl w-full max-w-2xl h-64 flex flex-col items-center justify-center">
-                <FileText className="w-12 h-12 text-slate-400 mb-2" />
-                <p className="text-slate-500 font-medium">[ Standardized Picture Placeholder ]</p>
+              <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
+                <Image
+                  src={picture}
+                  alt="A kitchen scene with a child reaching into a cookie jar while a woman washes dishes"
+                  className="h-auto max-h-[28rem] w-full object-contain"
+                  priority
+                />
               </div>
               
               <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center max-w-2xl w-full">
