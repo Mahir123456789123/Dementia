@@ -1,6 +1,6 @@
 # Conditioning on Estimated Cognitive State: A Hierarchical Multimodal Approach to Speech-Based Dementia Screening
 
-Official code for the paper **"Conditioning on Estimated Cognitive State: A Hierarchical Multimodal Approach to Speech-Based Dementia Screening"** (preprint submitted to *Computer Speech & Language*, 2026).
+
 
 Hetanshi Shah, Tanay Kinariwala, Mahir Shah, Kailas Devadkar, Jignesh Sisodia
 Sardar Patel Institute of Technology, Mumbai, India
